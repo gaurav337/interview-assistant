@@ -46,3 +46,5 @@ ui_design_notes.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma

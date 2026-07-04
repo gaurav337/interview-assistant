@@ -1,0 +1,108 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+
+  @@index([email])
+  @@map("users")
+}
+
+// ─── Sessions ────────────────────────────────────────────────────────────────
+
+model Session {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Setup inputs
+  roleOrJdText   String          @db.Text
+  interviewType  String          // "hr" | "behavioral" | "technical" | "coding" | "system_design" | "case_study" | "mixed"
+  difficulty     String          @default("mid") // "junior" | "mid" | "senior"
+  questionCount  Int             @default(5)
+  resumeSummary  Json?           // Parsed ResumeData JSON (never store raw file)
+
+  // State
+  status         String          @default("in_progress") // "in_progress" | "completed" | "abandoned"
+  overallScore   Float?
+
+  // Summary (stored after completion)
+  summaryNarrative   String?     @db.Text
+  summaryByType      Json?       // Array of { type, score, note }
+  summaryStrengths   Json?       // String[]
+  summaryFocusAreas  Json?       // String[]
+
+  createdAt      DateTime        @default(now())
+  completedAt    DateTime?
+  questions      Question[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, interviewType])
+  @@map("sessions")
+}
+
+// ─── Questions ───────────────────────────────────────────────────────────────
+
+model Question {
+  id           String    @id @default(cuid())
+  sessionId    String
+  session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  orderIndex   Int
+  questionText String    @db.Text
+  type         String    // same enum as session.interviewType (per-question for mixed sessions)
+  category     String
+  testsFor     String    @db.Text
+  isSkipped    Boolean   @default(false)
+
+  answer       Answer?
+
+  @@index([sessionId])
+  @@map("questions")
+}
+
+// ─── Answers ─────────────────────────────────────────────────────────────────
+
+model Answer {
+  id               String    @id @default(cuid())
+  questionId       String    @unique
+  question         Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  answerText       String    @db.Text
+  inputMode        String    @default("text") // "text" | "voice" | "code"
+  modelUsed        String
+
+  // Evaluation result
+  score            Int?      // 1–10, null if skipped
+  strengths        Json      @default("[]") // String[]
+  gaps             Json      @default("[]") // String[]
+  critique         String?   @db.Text
+  correctiveAction String?   @db.Text
+  improvedAnswer   String?   @db.Text
+  followUpQuestion String?   @db.Text
+
+  // Voice-specific analytics (null for text/code answers)
+  fillerWordCount  Int?
+  wordsPerMinute   Int?
+  fillerBreakdown  Json?     // Record<string, number>
+
+  createdAt        DateTime  @default(now())
+
+  @@map("answers")
+}
